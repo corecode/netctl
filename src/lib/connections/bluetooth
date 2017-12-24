@@ -1,0 +1,36 @@
+# Contributed by: Simon Schubert <2-arch@0x2c.org>
+
+. "$SUBR_DIR/ip"
+
+: ${Controller:=hci0}
+: ${UUID:=nap}
+: ${BTControllerPath:=/org/bluez/${Controller}}
+: ${BTDevPath:=${BTControllerPath}/dev_${Device//:/_}}
+
+bluetooth_up() {
+    if [[ -z "$Device" ]]; then
+        report_error "Device '$Device' not set"
+        return 1
+    fi
+
+    dbus-send --print-reply --system --dest=org.bluez "$BTControllerPath" org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null
+
+    Interface=$(dbus-send --print-reply=literal --system --type=method_call --dest=org.bluez "$BTDevPath" org.bluez.Network1.Connect string:$UUID)
+    Interface=${Interface//[[:space:]]}
+
+    if [[ -z "${Interface}" ]]; then
+        report_error "did not receive bluetooth interface"
+        return 1
+    fi
+
+    report_debug "received interface '${Interface}'"
+
+    if ! ip_set; then
+        bluetooth_down
+        return 1
+    fi
+}
+
+bluetooth_down() {
+    dbus-send --print-reply=literal --system --type=method_call --dest=org.bluez "$BTDevPath" org.bluez.Network1.Disconnect
+}
